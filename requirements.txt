@@ -1,0 +1,7 @@
+langchain-openai
+langchain-anthropic
+langgraph
+python-dotenv
+requests
+ddgs
+pytest
