@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from tools.fitness.coach import get_coach_plan, _csv_to_table
+from tools.fitness.coach import get_coach_plan
 
 
 SAMPLE_CSV = """\
@@ -31,21 +31,37 @@ class TestGetCoachPlan:
             result = get_coach_plan()
         assert "Today is" in result
 
-    def test_includes_sheet_content(self):
+    def test_includes_week_schedule(self):
         with patch("os.getenv", return_value="https://docs.google.com/spreadsheets/d/abc/edit?gid=0"), \
              patch("requests.get", return_value=_mock_get(SAMPLE_CSV)):
             result = get_coach_plan()
-        assert "May-18" in result
-        assert "Strength" in result
-        assert "Hill sprints" in result
+        assert "WEEK OF May-18" in result
+        assert "Monday: Strength" in result
+        assert "Wednesday: Hill sprints" in result
 
-    def test_includes_exercises(self):
+    def test_monday_exercises_labeled(self):
         with patch("os.getenv", return_value="https://docs.google.com/spreadsheets/d/abc/edit?gid=0"), \
              patch("requests.get", return_value=_mock_get(SAMPLE_CSV)):
             result = get_coach_plan()
-        assert "Activation" in result
-        assert "Plank" in result
-        assert "Squats" in result
+        assert "MONDAY STRENGTH EXERCISES" in result
+        assert "- Activation" in result
+        assert "- Plank" in result
+        assert "- Squats" in result
+
+    def test_friday_exercises_labeled(self):
+        with patch("os.getenv", return_value="https://docs.google.com/spreadsheets/d/abc/edit?gid=0"), \
+             patch("requests.get", return_value=_mock_get(SAMPLE_CSV)):
+            result = get_coach_plan()
+        assert "FRIDAY STRENGTH EXERCISES" in result
+        assert "- Pallof Holds" in result
+        assert "- RDL" in result
+
+    def test_upper_body_exercises(self):
+        with patch("os.getenv", return_value="https://docs.google.com/spreadsheets/d/abc/edit?gid=0"), \
+             patch("requests.get", return_value=_mock_get(SAMPLE_CSV)):
+            result = get_coach_plan()
+        assert "UPPER BODY" in result
+        assert "- Incline Press" in result
 
     def test_handles_fetch_error(self):
         with patch("os.getenv", return_value="https://docs.google.com/spreadsheets/d/abc/edit?gid=0"), \
@@ -53,17 +69,9 @@ class TestGetCoachPlan:
             result = get_coach_plan()
         assert "Could not fetch" in result
 
-
-class TestCsvToTable:
-    def test_filters_empty_rows(self):
-        csv_text = "a,b\n\n\nc,d\n"
-        result = _csv_to_table(csv_text)
-        assert result.count("\n") == 1  # two data rows, one newline
-
-    def test_pipe_delimited(self):
-        result = _csv_to_table("a,b,c\n")
-        assert "|" in result
-
-    def test_empty_sheet(self):
-        result = _csv_to_table("\n\n")
-        assert "empty" in result
+    def test_no_invented_sets_instruction(self):
+        """Output should include the 'do not add sets' instruction to guide the LLM."""
+        with patch("os.getenv", return_value="https://docs.google.com/spreadsheets/d/abc/edit?gid=0"), \
+             patch("requests.get", return_value=_mock_get(SAMPLE_CSV)):
+            result = get_coach_plan()
+        assert "do not add sets" in result
