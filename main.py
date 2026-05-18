@@ -1,4 +1,8 @@
 import os
+import sys
+import time
+import threading
+import itertools
 import warnings
 import logging
 warnings.filterwarnings("ignore")
@@ -70,9 +74,108 @@ Never say you cannot access data — use the tools provided. Be concise and spec
 
 agent = create_react_agent(get_model(), tools, prompt=SYSTEM_PROMPT)
 
+# ---------------------------------------------------------------------------
+# Streaming progress display
+# ---------------------------------------------------------------------------
+
+TOOL_LABELS = {
+    "get_recent_activities":  "fetching recent activities",
+    "get_best_efforts":       "computing personal records",
+    "get_training_summary":   "analyzing training load",
+    "get_athlete_profile":    "loading athlete profile",
+    "get_shoes":              "checking gear",
+    "get_top_friends":        "loading friends list",
+    "get_my_clubs":           "fetching clubs",
+    "run_daily_kudos":        "giving kudos",
+    "build_top_friends":      "scanning kudos history",
+    "update_top_friends":     "updating friends list",
+    "get_coach_plan":         "reading coach plan",
+    "get_weather_forecast":   "checking weather",
+    "read_goals":             "reading goals",
+    "save_goals":             "saving goals",
+    "web_search":             "searching the web",
+}
+
+
+class _Spinner:
+    _FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+    def __init__(self):
+        self._msg = ""
+        self._running = False
+        self._thread = None
+
+    def start(self, msg: str = "thinking"):
+        self._msg = msg
+        self._running = True
+        self._thread = threading.Thread(target=self._spin, daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        self._running = False
+        if self._thread:
+            self._thread.join()
+            self._thread = None
+        sys.stdout.write(f"\r{' ' * (len(self._msg) + 6)}\r")
+        sys.stdout.flush()
+
+    def _spin(self):
+        for frame in itertools.cycle(self._FRAMES):
+            if not self._running:
+                break
+            sys.stdout.write(f"\r  {frame} {self._msg}")
+            sys.stdout.flush()
+            time.sleep(0.1)
+
+
+def _run_agent(history: list) -> tuple:
+    """Stream agent execution with live progress. Returns (reply, updated_history, timing)."""
+    spinner = _Spinner()
+    t0 = time.time()
+    t_mark = t0
+    llm_secs = 0.0
+    tool_secs = 0.0
+    accumulated = list(history)
+    reply = None
+
+    spinner.start("thinking")
+
+    for chunk in agent.stream({"messages": history}, stream_mode="updates"):
+        now = time.time()
+        elapsed = now - t_mark
+
+        if "agent" in chunk:
+            msgs = chunk["agent"]["messages"]
+            accumulated.extend(msgs)
+            llm_secs += elapsed
+            t_mark = now
+            msg = msgs[-1]
+
+            if hasattr(msg, "tool_calls") and msg.tool_calls:
+                spinner.stop()
+                for tc in msg.tool_calls:
+                    label = TOOL_LABELS.get(tc["name"], tc["name"])
+                    print(f"  → {label}")
+                spinner.start("thinking")
+            else:
+                spinner.stop()
+                reply = msg
+
+        elif "tools" in chunk:
+            accumulated.extend(chunk["tools"]["messages"])
+            tool_secs += elapsed
+            t_mark = now
+
+    total = time.time() - t0
+    timing = {"total": total, "llm": llm_secs, "tools": tool_secs}
+    return reply, accumulated, timing
+
+
+# ---------------------------------------------------------------------------
+# Startup sync
+# ---------------------------------------------------------------------------
 
 def _handle_sync_on_startup():
-    """Check sync status and prompt user on first run or after 24h."""
     if needs_initial_sync():
         print("Balboa: I don't have your Strava activities synced yet.")
         print("         A one-time sync fetches the last 1 year of activities locally.")
@@ -91,6 +194,10 @@ def _handle_sync_on_startup():
         if count:
             print(f"         {count} new activit{'y' if count == 1 else 'ies'} added.\n")
 
+
+# ---------------------------------------------------------------------------
+# Chat loop
+# ---------------------------------------------------------------------------
 
 def chat():
     provider = os.getenv("LLM_PROVIDER", "lemonade")
@@ -113,7 +220,6 @@ def chat():
             print("Goodbye!")
             break
 
-        # Manual sync trigger
         if user_input.lower() == "sync":
             print("Syncing Strava activities...")
             count = run_incremental_sync(progress_callback=lambda msg: print(f"  {msg}"))
@@ -122,17 +228,11 @@ def chat():
 
         history.append(HumanMessage(content=user_input))
 
-        response = agent.invoke({"messages": history})
-        messages = response["messages"]
-
-        reply = next(
-            (m for m in reversed(messages) if isinstance(m, AIMessage) and m.content),
-            None,
-        )
+        reply, history, timing = _run_agent(history)
 
         if reply:
-            print(f"\nBalboa: {reply.content}\n")
-            history = messages
+            print(f"\nBalboa: {reply.content}")
+            print(f"\n  ⏱  {timing['total']:.1f}s  ·  LLM {timing['llm']:.1f}s  ·  tools {timing['tools']:.1f}s\n")
         else:
             print("\nBalboa: (no response)\n")
 
