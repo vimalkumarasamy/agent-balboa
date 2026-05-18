@@ -1,68 +1,69 @@
 import pytest
-import calendar
-import re
 from unittest.mock import patch, MagicMock
-from tools.fitness.coach import get_coach_plan
+from tools.fitness.coach import get_coach_plan, _csv_to_table
 
 
-def _make_rows(week_label: str, wed_workout: str = "Hill sprints"):
-    return [
-        ["", "", "", "", "", "", "", "", "", "", "", ""],
-        ["", "", "", "", "", "", "", "", "", "", "", ""],
-        ["Monday", "Friday", "Upper Body Session", "", "Column 1",
-         "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
-        ["Activation", "Activation", "Incline Press", "", week_label,
-         "Strength", "Easy", wed_workout, "Easy", "Strength", "Easy", "Easy"],
-        ["Plank", "Pallof Holds", "Shoulder Press", "", "", "", "", "", "", "", "", ""],
-        ["Squats", "RDL", "", "", "", "", "", "", "", "", "", ""],
-    ]
+SAMPLE_CSV = """\
+Monday,Friday,Upper Body,,Week,Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday
+Activation,Activation,Incline Press,,May-18,Strength,Easy,Hill sprints,Easy,Strength,Easy,Easy
+Plank,Pallof Holds,Shoulder Press,,,,,,,,,
+Squats,RDL,,,,,,,,,,
+"""
 
 
-class TestCoachPlan:
-    def test_returns_plan_for_current_week(self):
-        rows = _make_rows("May18")
-        with patch("tools.fitness.coach._fetch_sheet", return_value=rows), \
-             patch("os.getenv", return_value="https://fake-sheet.com"):
-            result = get_coach_plan()
-        assert "May18" in result
-        assert "Monday" in result
-        assert "Friday" in result
+def _mock_get(csv_text):
+    mock = MagicMock()
+    mock.status_code = 200
+    mock.text = csv_text
+    mock.raise_for_status = lambda: None
+    return mock
 
-    def test_expands_monday_exercises(self):
-        rows = _make_rows("May18")
-        with patch("tools.fitness.coach._fetch_sheet", return_value=rows), \
-             patch("os.getenv", return_value="https://fake-sheet.com"):
-            result = get_coach_plan()
-        assert "Activation" in result
-        assert "Plank" in result
-        assert "Squats" in result
 
-    def test_expands_friday_exercises(self):
-        rows = _make_rows("May18")
-        with patch("tools.fitness.coach._fetch_sheet", return_value=rows), \
-             patch("os.getenv", return_value="https://fake-sheet.com"):
-            result = get_coach_plan()
-        assert "Pallof Holds" in result
-        assert "RDL" in result
-
-    def test_shows_wednesday_workout_as_is(self):
-        rows = _make_rows("May18", wed_workout="6 x 8s uphill sprints")
-        with patch("tools.fitness.coach._fetch_sheet", return_value=rows), \
-             patch("os.getenv", return_value="https://fake-sheet.com"):
-            result = get_coach_plan()
-        assert "6 x 8s uphill sprints" in result
-
+class TestGetCoachPlan:
     def test_returns_error_when_no_url(self):
         with patch("os.getenv", return_value=""):
             result = get_coach_plan()
         assert "COACH_SHEET_URL" in result
 
-    def test_date_formats_parsed(self):
-        """Test that various date formats in the sheet are matched correctly."""
-        abbr_to_month = {m.lower(): i for i, m in enumerate(calendar.month_abbr) if m}
-        formats = ["May-18", "May18", "Jun1", "Jun-8", "Jun15", "Jun-22"]
-        for raw in formats:
-            m = re.match(r"([A-Za-z]+)-?(\d+)", raw.strip())
-            assert m is not None, f"Failed to parse: {raw}"
-            month = abbr_to_month.get(m.group(1).lower()[:3])
-            assert month is not None, f"Unknown month in: {raw}"
+    def test_includes_today_date(self):
+        with patch("os.getenv", return_value="https://docs.google.com/spreadsheets/d/abc/edit?gid=0"), \
+             patch("requests.get", return_value=_mock_get(SAMPLE_CSV)):
+            result = get_coach_plan()
+        assert "Today is" in result
+
+    def test_includes_sheet_content(self):
+        with patch("os.getenv", return_value="https://docs.google.com/spreadsheets/d/abc/edit?gid=0"), \
+             patch("requests.get", return_value=_mock_get(SAMPLE_CSV)):
+            result = get_coach_plan()
+        assert "May-18" in result
+        assert "Strength" in result
+        assert "Hill sprints" in result
+
+    def test_includes_exercises(self):
+        with patch("os.getenv", return_value="https://docs.google.com/spreadsheets/d/abc/edit?gid=0"), \
+             patch("requests.get", return_value=_mock_get(SAMPLE_CSV)):
+            result = get_coach_plan()
+        assert "Activation" in result
+        assert "Plank" in result
+        assert "Squats" in result
+
+    def test_handles_fetch_error(self):
+        with patch("os.getenv", return_value="https://docs.google.com/spreadsheets/d/abc/edit?gid=0"), \
+             patch("requests.get", side_effect=Exception("network error")):
+            result = get_coach_plan()
+        assert "Could not fetch" in result
+
+
+class TestCsvToTable:
+    def test_filters_empty_rows(self):
+        csv_text = "a,b\n\n\nc,d\n"
+        result = _csv_to_table(csv_text)
+        assert result.count("\n") == 1  # two data rows, one newline
+
+    def test_pipe_delimited(self):
+        result = _csv_to_table("a,b,c\n")
+        assert "|" in result
+
+    def test_empty_sheet(self):
+        result = _csv_to_table("\n\n")
+        assert "empty" in result
