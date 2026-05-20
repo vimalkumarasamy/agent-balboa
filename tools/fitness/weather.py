@@ -15,9 +15,11 @@ def get_weather_forecast(city: str = None, days: int = 3) -> dict:
         city = os.getenv("HOME_CITY", "Memphis, TN")
 
     # Geocode city to lat/lon using open-meteo's free geocoding API
+    # Strip state/country suffix (e.g. "Everett, WA" → "Everett") for better match
+    city_name = city.split(",")[0].strip()
     geo_resp = requests.get(
         "https://geocoding-api.open-meteo.com/v1/search",
-        params={"name": city, "count": 1, "language": "en", "format": "json"},
+        params={"name": city_name, "count": 1, "language": "en", "format": "json", "countryCode": "US"},
     )
     geo_resp.raise_for_status()
     results = geo_resp.json().get("results")
