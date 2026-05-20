@@ -23,6 +23,7 @@ from tools.fitness.weather import get_weather_forecast
 from tools.fitness.goals import read_goals, save_goals
 from tools.fitness.coach import get_coach_plan
 from tools.fitness.search import web_search
+from tools.calendar.events import get_upcoming_events
 
 load_dotenv()
 logging.basicConfig(level=logging.WARNING)
@@ -57,6 +58,8 @@ tools = [
     read_goals,
     save_goals,
     web_search,
+    # Calendar
+    get_upcoming_events,
 ]
 
 SYSTEM_PROMPT = """You are Balboa, a personal fitness assistant with access to tools.
@@ -66,6 +69,7 @@ When the user asks about workouts, training, or what to do next:
 - ALWAYS call get_coach_plan to see what the coach has scheduled this week
 - ALWAYS call get_weather_forecast to check upcoming conditions
 - ALWAYS call read_goals to understand their fitness goals
+- ALWAYS call get_upcoming_events to check for travel, busy days, or conflicts before recommending workout timing
 - Use get_best_efforts to contextualize performance — reference PRs when suggesting paces or goals
 - Use web_search to find local races, running events, or any information not in the tools above
 - Combine everything to give a specific, reasoned recommendation: what to do, when, and why
@@ -100,6 +104,7 @@ TOOL_LABELS = {
     "read_goals":             "reading goals",
     "save_goals":             "saving goals",
     "web_search":             "searching the web",
+    "get_upcoming_events":    "checking your calendar",
 }
 
 

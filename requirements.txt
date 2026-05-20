@@ -5,3 +5,5 @@ python-dotenv
 requests
 ddgs
 pytest
+google-auth-oauthlib
+google-api-python-client

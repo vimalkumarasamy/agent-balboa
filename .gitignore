@@ -17,6 +17,10 @@ data/kudos_log.json
 data/prs_cache.json
 data/meta.json
 data/goals.md
+data/calendar_token.json
+
+# Google OAuth credentials — never commit
+credentials.json
 
 # IDE
 .continue/
