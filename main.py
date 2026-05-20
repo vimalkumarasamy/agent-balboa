@@ -23,6 +23,7 @@ from tools.fitness.weather import get_weather_forecast
 from tools.fitness.goals import read_goals, save_goals
 from tools.fitness.coach import get_coach_plan
 from tools.fitness.search import web_search
+from tools.fitness.form_analysis import analyze_form
 from tools.calendar.events import get_upcoming_events
 from tools.health.recovery import get_recovery_status
 
@@ -63,6 +64,8 @@ tools = [
     get_upcoming_events,
     # Health platforms
     get_recovery_status,
+    # Form analysis
+    analyze_form,
 ]
 
 SYSTEM_PROMPT = """You are Balboa, a personal fitness assistant with access to tools.
@@ -110,6 +113,7 @@ TOOL_LABELS = {
     "web_search":             "searching the web",
     "get_upcoming_events":    "checking your calendar",
     "get_recovery_status":    "checking recovery & sleep",
+    "analyze_form":           "analysing video form",
 }
 
 
