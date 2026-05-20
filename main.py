@@ -221,7 +221,8 @@ def _handle_sync_on_startup():
 
 def chat():
     provider = os.getenv("LLM_PROVIDER", "lemonade")
-    print(f"\nBalboa ready [{provider}]. Type 'exit' to quit.\n")
+    print(f"\nBalboa ready [{provider}]. Type 'exit' to quit.")
+    print("  Form analysis: drop a video into data/videos/ then ask 'analyse my form'\n")
 
     _handle_sync_on_startup()
 

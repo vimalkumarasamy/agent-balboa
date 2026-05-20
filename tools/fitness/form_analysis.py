@@ -1,11 +1,16 @@
 import os
+import glob
 import base64
 import math
 import requests
 import cv2
+from typing import Optional
 from dotenv import load_dotenv
 
 load_dotenv()
+
+VIDEO_DROP_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "videos")
+VIDEO_EXTS = ("*.mp4", "*.mov", "*.avi", "*.mkv")
 
 LEMONADE_BASE = "http://localhost:13305/v1"
 VISION_MODEL = "Qwen2.5-VL-7B-Instruct-GGUF"
@@ -130,7 +135,18 @@ def _call_vision_model(content: list) -> str:
         return resp.json()["choices"][0]["message"]["content"]
 
 
-def analyze_form(video_path: str, activity_type: str = "running") -> str:
+def _latest_dropped_video() -> Optional[str]:
+    """Return the most recently modified video in data/videos/, or None."""
+    drop_dir = os.path.normpath(os.path.join(VIDEO_DROP_DIR))
+    candidates = []
+    for pattern in VIDEO_EXTS:
+        candidates.extend(glob.glob(os.path.join(drop_dir, pattern)))
+    if not candidates:
+        return None
+    return max(candidates, key=os.path.getmtime)
+
+
+def analyze_form(video_path: str = "", activity_type: str = "running") -> str:
     """Analyze running or strength training form from a video file.
 
     Extracts key frames, measures body pose angles with MediaPipe, then sends
@@ -138,11 +154,21 @@ def analyze_form(video_path: str, activity_type: str = "running") -> str:
     biomechanics feedback.
 
     Args:
-        video_path: Path to the video file (MP4, MOV, AVI). Tilde (~) supported.
+        video_path: Path to the video file (MP4, MOV, AVI). Leave empty to use
+                    the latest file dropped into data/videos/.
         activity_type: Type of movement — 'running', 'strength', or 'general'.
 
     Returns a coach-style critique: key issues, root causes, and correction drills.
     """
+    if not video_path:
+        latest = _latest_dropped_video()
+        if not latest:
+            return (
+                "No video found. Drop a video file into data/videos/ "
+                "or provide a path: analyze_form('/path/to/video.mp4')"
+            )
+        video_path = latest
+
     video_path = os.path.expanduser(video_path)
 
     if not os.path.exists(video_path):

@@ -12,6 +12,10 @@ build/
 
 # Personal data — never commit
 data/activities/
+data/videos/*.mp4
+data/videos/*.mov
+data/videos/*.avi
+data/videos/*.mkv
 data/top_friends.json
 data/kudos_log.json
 data/prs_cache.json
