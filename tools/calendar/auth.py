@@ -30,7 +30,7 @@ def get_credentials() -> Credentials:
                     "Download it from Google Cloud Console → APIs & Services → Credentials."
                 )
             flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
-            creds = flow.run_local_server(port=8765)
+            creds = flow.run_local_server(port=0)  # port=0 picks any available port
 
         os.makedirs(os.path.dirname(TOKEN_PATH), exist_ok=True)
         with open(TOKEN_PATH, "w") as f:
